@@ -115,7 +115,18 @@ async function searchCode(directory, searchTerm, filePattern = '**/*', excludePa
 // Export results to file
 function exportResults(results, format, outputPath, searchTerm, directory) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileName = outputPath || `search-results-${timestamp}.${format}`;
+
+  // Create a filename that includes search keyword and root folder name
+  let fileName;
+  if (outputPath) {
+    fileName = outputPath;
+  } else {
+    // Get the base name of the directory (last part of the path)
+    const folderName = path.basename(directory);
+    // Sanitize search term for filename (remove special characters)
+    const sanitizedSearchTerm = searchTerm.replace(/[^a-zA-Z0-9-_]/g, '-');
+    fileName = `search-${sanitizedSearchTerm}-in-${folderName}-${timestamp}.${format}`;
+  }
 
   let content = '';
 
@@ -161,23 +172,7 @@ function exportResults(results, format, outputPath, searchTerm, directory) {
   }
 
   fs.writeFileSync(fileName, content, 'utf-8');
-  return fileName;
-}
-
-// Display results in terminal
-function displayResults(results, searchTerm) {
-  if (results.length === 0) {
-    console.log(chalk.yellow(`\nNo results found for "${searchTerm}"\n`));
-    return;
-  }
-
-  console.log(chalk.green(`\nFound ${results.length} matches:\n`));
-
-  results.forEach((result, index) => {
-    console.log(chalk.cyan(`[${index + 1}] ${result.file}:${result.line}`));
-    console.log(chalk.gray(`    ${result.content}`));
-    console.log('');
-  });
+  return path.resolve(fileName);
 }
 
 // Folder picker - browse directories interactively
@@ -278,64 +273,66 @@ async function interactiveMode() {
   answers.directory = directory;
 
   const results = await searchCode(answers.directory, answers.searchTerm, answers.filePattern);
-  displayResults(results, answers.searchTerm);
 
-  if (results.length > 0) {
-    const actions = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'action',
-        message: 'What would you like to do?',
-        choices: [
-          { name: 'Export to Markdown', value: 'export-md' },
-          { name: 'Export to Text', value: 'export-txt' },
-          { name: 'Open a file', value: 'open' },
-          { name: 'Exit', value: 'exit' }
-        ]
-      }
-    ]);
+  if (results.length === 0) {
+    console.log(chalk.yellow(`\nNo results found for "${answers.searchTerm}"\n`));
+    return;
+  }
 
-    switch (actions.action) {
-      case 'export-md':
-        const mdFile = exportResults(results, 'md', null, answers.searchTerm, answers.directory);
-        console.log(chalk.green(`\n✓ Results exported to ${mdFile}\n`));
-        break;
+  // Default: Export to Markdown
+  const mdFile = exportResults(results, 'md', null, answers.searchTerm, answers.directory);
+  console.log(chalk.green(`\n✓ Found ${results.length} matches!`));
+  console.log(chalk.green(`✓ Results exported to: ${chalk.cyan(mdFile)}\n`));
 
-      case 'export-txt':
-        const txtFile = exportResults(results, 'txt', null, answers.searchTerm, answers.directory);
-        console.log(chalk.green(`\n✓ Results exported to ${txtFile}\n`));
-        break;
-
-      case 'open':
-        const fileChoices = [...new Set(results.map(r => r.file))].map((file, index) => ({
-          name: `${file} (${results.filter(r => r.file === file).length} matches)`,
-          value: index
-        }));
-
-        const fileSelection = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'fileIndex',
-            message: 'Select file to open:',
-            choices: fileChoices,
-            pageSize: 15
-          }
-        ]);
-
-        const selectedFile = results.find(r => r.file === [...new Set(results.map(r => r.file))][fileSelection.fileIndex]);
-
-        try {
-          await open(selectedFile.absolutePath);
-          console.log(chalk.green(`\n✓ Opening ${selectedFile.file}\n`));
-        } catch (err) {
-          console.error(chalk.red(`\nError opening file: ${err.message}\n`));
-        }
-        break;
-
-      case 'exit':
-        console.log(chalk.blue('\nGoodbye!\n'));
-        break;
+  // Ask if user wants to do more actions
+  const actions = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: 'What would you like to do next?',
+      choices: [
+        { name: 'Open a file', value: 'open' },
+        { name: 'Export to Text format as well', value: 'export-txt' },
+        { name: 'Exit', value: 'exit' }
+      ]
     }
+  ]);
+
+  switch (actions.action) {
+    case 'export-txt':
+      const txtFile = exportResults(results, 'txt', null, answers.searchTerm, answers.directory);
+      console.log(chalk.green(`\n✓ Results also exported to: ${chalk.cyan(txtFile)}\n`));
+      break;
+
+    case 'open':
+      const fileChoices = [...new Set(results.map(r => r.file))].map((file, index) => ({
+        name: `${file} (${results.filter(r => r.file === file).length} matches)`,
+        value: index
+      }));
+
+      const fileSelection = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'fileIndex',
+          message: 'Select file to open:',
+          choices: fileChoices,
+          pageSize: 15
+        }
+      ]);
+
+      const selectedFile = results.find(r => r.file === [...new Set(results.map(r => r.file))][fileSelection.fileIndex]);
+
+      try {
+        await open(selectedFile.absolutePath);
+        console.log(chalk.green(`\n✓ Opening ${selectedFile.file}\n`));
+      } catch (err) {
+        console.error(chalk.red(`\nError opening file: ${err.message}\n`));
+      }
+      break;
+
+    case 'exit':
+      console.log(chalk.blue('\nGoodbye!\n'));
+      break;
   }
 }
 
@@ -357,13 +354,17 @@ program
       await interactiveMode();
     } else if (options.search) {
       const results = await searchCode(options.directory, options.search, options.pattern);
-      displayResults(results, options.search);
 
-      if (options.export && results.length > 0) {
-        const format = options.export === 'md' ? 'md' : 'txt';
-        const fileName = exportResults(results, format, options.output, options.search, options.directory);
-        console.log(chalk.green(`\n✓ Results exported to ${fileName}\n`));
+      if (results.length === 0) {
+        console.log(chalk.yellow(`\nNo results found for "${options.search}"\n`));
+        return;
       }
+
+      // Default: Export to Markdown
+      const format = options.export || 'md';
+      const fileName = exportResults(results, format, options.output, options.search, options.directory);
+      console.log(chalk.green(`\n✓ Found ${results.length} matches!`));
+      console.log(chalk.green(`✓ Results exported to: ${chalk.cyan(fileName)}\n`));
     } else {
       console.log(chalk.yellow('Please provide a search term with -s or use -i for interactive mode'));
       program.help();

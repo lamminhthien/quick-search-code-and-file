@@ -10,3 +10,7 @@ Option 2: Show folder popup selection to easily choose folder (I don't want to m
 # Enhancement 2
 For search pattern, let don't search on some file or folder which is ignore by .gitignore
 Skip search on NodeModules
+
+# Enhancement 3
+Instead of show everything in terminal, let default export to Markdown file
+and show the path of this file, also for the file name, let include the search keywords and the root folder search location
