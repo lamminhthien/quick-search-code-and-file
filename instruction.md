@@ -6,3 +6,7 @@ AS you can know when we are using the visual studio code or github, we often sea
 In the search file, Let user choose one of 2 option:
 Option 1: Enter the folder path
 Option 2: Show folder popup selection to easily choose folder (I don't want to manual copy and past folder path)
+
+# Enhancement 2
+For search pattern, let don't search on some file or folder which is ignore by .gitignore
+Skip search on NodeModules

@@ -7,6 +7,34 @@ const fs = require('fs');
 const path = require('path');
 const { glob } = require('glob');
 const open = require('open');
+const ignore = require('ignore');
+
+// Read and parse .gitignore file
+function loadGitignorePatterns(directory) {
+  const gitignorePath = path.join(directory, '.gitignore');
+  const patterns = [];
+
+  try {
+    if (fs.existsSync(gitignorePath)) {
+      const gitignoreContent = fs.readFileSync(gitignorePath, 'utf-8');
+      const lines = gitignoreContent.split('\n');
+
+      lines.forEach(line => {
+        // Remove comments and trim whitespace
+        const trimmedLine = line.trim();
+        // Skip empty lines and comments
+        if (trimmedLine && !trimmedLine.startsWith('#')) {
+          patterns.push(trimmedLine);
+        }
+      });
+    }
+  } catch (err) {
+    // If .gitignore can't be read, just continue without it
+    console.log(chalk.yellow(`Warning: Could not read .gitignore: ${err.message}`));
+  }
+
+  return patterns;
+}
 
 // Search for code in files
 async function searchCode(directory, searchTerm, filePattern = '**/*', excludePatterns = []) {
@@ -24,7 +52,27 @@ async function searchCode(directory, searchTerm, filePattern = '**/*', excludePa
     '**/*.min.css'
   ];
 
-  const allExcludes = [...defaultExcludes, ...excludePatterns];
+  // Load .gitignore patterns
+  const gitignorePatterns = loadGitignorePatterns(directory);
+
+  // Convert gitignore patterns to glob patterns (add **/ prefix if needed)
+  const gitignoreGlobPatterns = gitignorePatterns.map(pattern => {
+    // If pattern doesn't start with *, /, or **, add **/ prefix to match anywhere in tree
+    if (!pattern.startsWith('*') && !pattern.startsWith('/') && !pattern.startsWith('**')) {
+      return `**/${pattern}`;
+    }
+    // If pattern starts with /, remove it and don't add **/ prefix (root-relative)
+    if (pattern.startsWith('/')) {
+      return pattern.substring(1);
+    }
+    return pattern;
+  });
+
+  const allExcludes = [...defaultExcludes, ...gitignoreGlobPatterns, ...excludePatterns];
+
+  if (gitignorePatterns.length > 0) {
+    console.log(chalk.gray(`Loaded ${gitignorePatterns.length} patterns from .gitignore`));
+  }
 
   try {
     // Find all files matching the pattern
