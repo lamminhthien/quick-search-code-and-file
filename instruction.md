@@ -14,3 +14,9 @@ Skip search on NodeModules
 # Enhancement 3
 Instead of show everything in terminal, let default export to Markdown file
 and show the path of this file, also for the file name, let include the search keywords and the root folder search location
+
+# Enhancement 4
+Let store search result file in ~/Desktop/Search_Code_Pro_Result
+
+# Enhancement 5
+Skip search in openapi-spec.json

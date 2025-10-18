@@ -49,7 +49,8 @@ async function searchCode(directory, searchTerm, filePattern = '**/*', excludePa
     '**/.next/**',
     '**/coverage/**',
     '**/*.min.js',
-    '**/*.min.css'
+    '**/*.min.css',
+    '**/openapi-spec.json'
   ];
 
   // Load .gitignore patterns
@@ -115,17 +116,26 @@ async function searchCode(directory, searchTerm, filePattern = '**/*', excludePa
 // Export results to file
 function exportResults(results, format, outputPath, searchTerm, directory) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const os = require('os');
+
+  // Define the output directory
+  const outputDir = path.join(os.homedir(), 'Desktop', 'Search_Code_Pro_Result');
+
+  // Create the output directory if it doesn't exist
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
 
   // Create a filename that includes search keyword and root folder name
   let fileName;
   if (outputPath) {
-    fileName = outputPath;
+    fileName = path.join(outputDir, path.basename(outputPath));
   } else {
     // Get the base name of the directory (last part of the path)
     const folderName = path.basename(directory);
     // Sanitize search term for filename (remove special characters)
     const sanitizedSearchTerm = searchTerm.replace(/[^a-zA-Z0-9-_]/g, '-');
-    fileName = `search-${sanitizedSearchTerm}-in-${folderName}-${timestamp}.${format}`;
+    fileName = path.join(outputDir, `search-${sanitizedSearchTerm}-in-${folderName}-${timestamp}.${format}`);
   }
 
   let content = '';
