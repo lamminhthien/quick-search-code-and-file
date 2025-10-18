@@ -132,17 +132,86 @@ function displayResults(results, searchTerm) {
   });
 }
 
+// Folder picker - browse directories interactively
+async function folderPicker(startPath = process.cwd()) {
+  let currentPath = path.resolve(startPath);
+
+  while (true) {
+    // Read directories in current path
+    let dirs = [];
+    try {
+      const items = fs.readdirSync(currentPath, { withFileTypes: true });
+      dirs = items
+        .filter(item => item.isDirectory() && !item.name.startsWith('.'))
+        .map(item => item.name)
+        .sort();
+    } catch (err) {
+      console.log(chalk.red(`Cannot read directory: ${err.message}`));
+      currentPath = path.dirname(currentPath);
+      continue;
+    }
+
+    const choices = [
+      { name: chalk.green(`✓ Select this folder: ${currentPath}`), value: '__select__' },
+      { name: chalk.blue('.. (Parent directory)'), value: '..' },
+      new inquirer.Separator(),
+      ...dirs.map(dir => ({ name: `📁 ${dir}`, value: dir }))
+    ];
+
+    const answer = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'selection',
+        message: `Current location: ${chalk.cyan(currentPath)}`,
+        choices: choices,
+        pageSize: 15
+      }
+    ]);
+
+    if (answer.selection === '__select__') {
+      return currentPath;
+    } else if (answer.selection === '..') {
+      currentPath = path.dirname(currentPath);
+    } else {
+      currentPath = path.join(currentPath, answer.selection);
+    }
+  }
+}
+
 // Interactive mode
 async function interactiveMode() {
   console.log(chalk.bold.blue('\n🔍 Quick Search - Interactive Mode\n'));
 
-  const answers = await inquirer.prompt([
+  // Ask user to choose between manual input or folder picker
+  const methodChoice = await inquirer.prompt([
     {
-      type: 'input',
-      name: 'directory',
-      message: 'Enter directory to search (or press Enter for current directory):',
-      default: process.cwd()
-    },
+      type: 'list',
+      name: 'method',
+      message: 'How would you like to select the folder?',
+      choices: [
+        { name: 'Browse and select folder (Interactive)', value: 'picker' },
+        { name: 'Enter folder path manually', value: 'manual' }
+      ]
+    }
+  ]);
+
+  let directory;
+  if (methodChoice.method === 'picker') {
+    directory = await folderPicker();
+    console.log(chalk.green(`\nSelected folder: ${directory}\n`));
+  } else {
+    const pathInput = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'directory',
+        message: 'Enter directory to search (or press Enter for current directory):',
+        default: process.cwd()
+      }
+    ]);
+    directory = pathInput.directory;
+  }
+
+  const answers = await inquirer.prompt([
     {
       type: 'input',
       name: 'searchTerm',
@@ -156,6 +225,9 @@ async function interactiveMode() {
       default: '**/*'
     }
   ]);
+
+  // Add directory to answers
+  answers.directory = directory;
 
   const results = await searchCode(answers.directory, answers.searchTerm, answers.filePattern);
   displayResults(results, answers.searchTerm);
