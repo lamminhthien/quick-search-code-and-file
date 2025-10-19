@@ -301,6 +301,7 @@ async function interactiveMode() {
       name: 'action',
       message: 'What would you like to do next?',
       choices: [
+        { name: 'Open result folder in Finder', value: 'open-folder' },
         { name: 'Open a file', value: 'open' },
         { name: 'Export to Text format as well', value: 'export-txt' },
         { name: 'Exit', value: 'exit' }
@@ -309,6 +310,17 @@ async function interactiveMode() {
   ]);
 
   switch (actions.action) {
+    case 'open-folder':
+      const os = require('os');
+      const resultFolderPath = path.join(os.homedir(), 'Desktop', 'Search_Code_Pro_Result');
+      try {
+        await open(resultFolderPath);
+        console.log(chalk.green(`\n✓ Opening result folder in Finder\n`));
+      } catch (err) {
+        console.error(chalk.red(`\nError opening folder: ${err.message}\n`));
+      }
+      break;
+
     case 'export-txt':
       const txtFile = exportResults(results, 'txt', null, answers.searchTerm, answers.directory);
       console.log(chalk.green(`\n✓ Results also exported to: ${chalk.cyan(txtFile)}\n`));

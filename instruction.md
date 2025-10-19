@@ -20,3 +20,6 @@ Let store search result file in ~/Desktop/Search_Code_Pro_Result
 
 # Enhancement 5
 Skip search in openapi-spec.json
+
+# Enhancement 6 
+Let use finder to open folder which contains result search file
