@@ -21,5 +21,17 @@ Let store search result file in ~/Desktop/Search_Code_Pro_Result
 # Enhancement 5
 Skip search in openapi-spec.json
 
-# Enhancement 6 
+# Enhancement 6
 Let use finder to open folder which contains result search file
+
+# Enhancement 7 ✅ COMPLETED
+I want to search with multiple keywords, a behavior is that the prompt input will let user to type many of keywords after press enter. And when user press i button, it will complete collect multiple keywords and start to search. Goal is that will search file that contain many keywords
+
+**Implementation Details:**
+- Added "Multiple keywords search" mode in interactive mode
+- Users can enter keywords one by one
+- Type "done" to finish collecting keywords and start search
+- The search finds files that contain ALL specified keywords
+- Result files show which keywords matched on each line
+- Filename includes all keywords in the format: `search-keyword1-and-keyword2-in-folder-timestamp.md`
+- Works with both markdown and text export formats

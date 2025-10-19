@@ -37,8 +37,13 @@ function loadGitignorePatterns(directory) {
 }
 
 // Search for code in files
+// searchTerm can be a string or an array of strings (multiple keywords)
 async function searchCode(directory, searchTerm, filePattern = '**/*', excludePatterns = []) {
   const results = [];
+
+  // Convert searchTerm to array if it's a string
+  const searchTerms = Array.isArray(searchTerm) ? searchTerm : [searchTerm];
+  const isMultiKeywordSearch = searchTerms.length > 1;
 
   // Default exclude patterns
   const defaultExcludes = [
@@ -75,6 +80,10 @@ async function searchCode(directory, searchTerm, filePattern = '**/*', excludePa
     console.log(chalk.gray(`Loaded ${gitignorePatterns.length} patterns from .gitignore`));
   }
 
+  if (isMultiKeywordSearch) {
+    console.log(chalk.cyan(`\nSearching for files containing ALL keywords: ${searchTerms.map(t => `"${t}"`).join(', ')}\n`));
+  }
+
   try {
     // Find all files matching the pattern
     const files = await glob(filePattern, {
@@ -92,16 +101,45 @@ async function searchCode(directory, searchTerm, filePattern = '**/*', excludePa
         const content = fs.readFileSync(file, 'utf-8');
         const lines = content.split('\n');
 
-        lines.forEach((line, index) => {
-          if (line.toLowerCase().includes(searchTerm.toLowerCase())) {
-            results.push({
-              file: path.relative(directory, file),
-              line: index + 1,
-              content: line.trim(),
-              absolutePath: file
+        if (isMultiKeywordSearch) {
+          // For multiple keywords, check if the file contains ALL keywords
+          const contentLower = content.toLowerCase();
+          const hasAllKeywords = searchTerms.every(term =>
+            contentLower.includes(term.toLowerCase())
+          );
+
+          if (hasAllKeywords) {
+            // Find lines that contain any of the keywords
+            lines.forEach((line, index) => {
+              const lineLower = line.toLowerCase();
+              const matchedKeywords = searchTerms.filter(term =>
+                lineLower.includes(term.toLowerCase())
+              );
+
+              if (matchedKeywords.length > 0) {
+                results.push({
+                  file: path.relative(directory, file),
+                  line: index + 1,
+                  content: line.trim(),
+                  absolutePath: file,
+                  matchedKeywords: matchedKeywords
+                });
+              }
             });
           }
-        });
+        } else {
+          // Single keyword search (original behavior)
+          lines.forEach((line, index) => {
+            if (line.toLowerCase().includes(searchTerms[0].toLowerCase())) {
+              results.push({
+                file: path.relative(directory, file),
+                line: index + 1,
+                content: line.trim(),
+                absolutePath: file
+              });
+            }
+          });
+        }
       } catch (err) {
         // Skip binary files or files that can't be read
       }
@@ -126,6 +164,10 @@ function exportResults(results, format, outputPath, searchTerm, directory) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  // Handle searchTerm as string or array
+  const searchTerms = Array.isArray(searchTerm) ? searchTerm : [searchTerm];
+  const isMultiKeywordSearch = searchTerms.length > 1;
+
   // Create a filename that includes search keyword and root folder name
   let fileName;
   if (outputPath) {
@@ -134,7 +176,9 @@ function exportResults(results, format, outputPath, searchTerm, directory) {
     // Get the base name of the directory (last part of the path)
     const folderName = path.basename(directory);
     // Sanitize search term for filename (remove special characters)
-    const sanitizedSearchTerm = searchTerm.replace(/[^a-zA-Z0-9-_]/g, '-');
+    const sanitizedSearchTerm = isMultiKeywordSearch
+      ? searchTerms.map(t => t.replace(/[^a-zA-Z0-9-_]/g, '-')).join('-and-')
+      : searchTerms[0].replace(/[^a-zA-Z0-9-_]/g, '-');
     fileName = path.join(outputDir, `search-${sanitizedSearchTerm}-in-${folderName}-${timestamp}.${format}`);
   }
 
@@ -142,7 +186,15 @@ function exportResults(results, format, outputPath, searchTerm, directory) {
 
   if (format === 'md') {
     content = `# Search Results\n\n`;
-    content += `**Search Term:** \`${searchTerm}\`\n`;
+    if (isMultiKeywordSearch) {
+      content += `**Search Keywords (ALL must be present):**\n`;
+      searchTerms.forEach(term => {
+        content += `- \`${term}\`\n`;
+      });
+      content += `\n`;
+    } else {
+      content += `**Search Term:** \`${searchTerms[0]}\`\n`;
+    }
     content += `**Directory:** \`${directory}\`\n`;
     content += `**Date:** ${new Date().toLocaleString()}\n`;
     content += `**Total Results:** ${results.length}\n\n`;
@@ -160,14 +212,25 @@ function exportResults(results, format, outputPath, searchTerm, directory) {
     Object.keys(groupedResults).forEach(file => {
       content += `## ${file}\n\n`;
       groupedResults[file].forEach(result => {
-        content += `**Line ${result.line}:**\n\`\`\`\n${result.content}\n\`\`\`\n\n`;
+        content += `**Line ${result.line}:**`;
+        if (result.matchedKeywords && result.matchedKeywords.length > 0) {
+          content += ` _(matched: ${result.matchedKeywords.map(k => `\`${k}\``).join(', ')})_`;
+        }
+        content += `\n\`\`\`\n${result.content}\n\`\`\`\n\n`;
       });
     });
   } else {
     // txt format
     content = `Search Results\n`;
     content += `${'='.repeat(50)}\n`;
-    content += `Search Term: ${searchTerm}\n`;
+    if (isMultiKeywordSearch) {
+      content += `Search Keywords (ALL must be present):\n`;
+      searchTerms.forEach(term => {
+        content += `  - ${term}\n`;
+      });
+    } else {
+      content += `Search Term: ${searchTerms[0]}\n`;
+    }
     content += `Directory: ${directory}\n`;
     content += `Date: ${new Date().toLocaleString()}\n`;
     content += `Total Results: ${results.length}\n`;
@@ -176,6 +239,9 @@ function exportResults(results, format, outputPath, searchTerm, directory) {
     results.forEach(result => {
       content += `File: ${result.file}\n`;
       content += `Line: ${result.line}\n`;
+      if (result.matchedKeywords && result.matchedKeywords.length > 0) {
+        content += `Matched Keywords: ${result.matchedKeywords.join(', ')}\n`;
+      }
       content += `Content: ${result.content}\n`;
       content += `${'-'.repeat(50)}\n`;
     });
@@ -264,13 +330,67 @@ async function interactiveMode() {
     directory = pathInput.directory;
   }
 
-  const answers = await inquirer.prompt([
+  // Ask if user wants single or multiple keyword search
+  const searchMode = await inquirer.prompt([
     {
-      type: 'input',
-      name: 'searchTerm',
-      message: 'Enter search term:',
-      validate: (input) => input.length > 0 || 'Search term cannot be empty'
-    },
+      type: 'list',
+      name: 'mode',
+      message: 'Search mode:',
+      choices: [
+        { name: 'Single keyword search', value: 'single' },
+        { name: 'Multiple keywords search (find files containing ALL keywords)', value: 'multiple' }
+      ]
+    }
+  ]);
+
+  let searchTerms = [];
+
+  if (searchMode.mode === 'single') {
+    const answer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'searchTerm',
+        message: 'Enter search term:',
+        validate: (input) => input.length > 0 || 'Search term cannot be empty'
+      }
+    ]);
+    searchTerms = [answer.searchTerm];
+  } else {
+    // Multiple keywords mode
+    console.log(chalk.cyan('\nEnter keywords one by one. Type "done" when finished.\n'));
+
+    while (true) {
+      const keywordPrompt = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'keyword',
+          message: `Enter keyword ${searchTerms.length + 1} (or "done" to finish):`,
+          validate: (input) => {
+            if (input.length === 0) {
+              return 'Keyword cannot be empty';
+            }
+            return true;
+          }
+        }
+      ]);
+
+      if (keywordPrompt.keyword.toLowerCase() === 'done') {
+        if (searchTerms.length === 0) {
+          console.log(chalk.yellow('You must enter at least one keyword!\n'));
+          continue;
+        }
+        break;
+      }
+
+      searchTerms.push(keywordPrompt.keyword);
+      console.log(chalk.green(`✓ Added keyword: "${keywordPrompt.keyword}"`));
+      console.log(chalk.gray(`Current keywords: ${searchTerms.map(t => `"${t}"`).join(', ')}\n`));
+    }
+
+    console.log(chalk.cyan(`\nSearching for files containing ALL ${searchTerms.length} keywords\n`));
+  }
+
+  const filePatternAnswer = await inquirer.prompt([
     {
       type: 'input',
       name: 'filePattern',
@@ -279,18 +399,20 @@ async function interactiveMode() {
     }
   ]);
 
-  // Add directory to answers
-  answers.directory = directory;
+  const results = await searchCode(directory, searchTerms.length === 1 ? searchTerms[0] : searchTerms, filePatternAnswer.filePattern);
 
-  const results = await searchCode(answers.directory, answers.searchTerm, answers.filePattern);
+  const searchTermDisplay = searchTerms.length === 1 ? searchTerms[0] : searchTerms;
 
   if (results.length === 0) {
-    console.log(chalk.yellow(`\nNo results found for "${answers.searchTerm}"\n`));
+    const noResultMsg = Array.isArray(searchTermDisplay)
+      ? `\nNo results found for keywords: ${searchTermDisplay.map(t => `"${t}"`).join(', ')}\n`
+      : `\nNo results found for "${searchTermDisplay}"\n`;
+    console.log(chalk.yellow(noResultMsg));
     return;
   }
 
   // Default: Export to Markdown
-  const mdFile = exportResults(results, 'md', null, answers.searchTerm, answers.directory);
+  const mdFile = exportResults(results, 'md', null, searchTermDisplay, directory);
   console.log(chalk.green(`\n✓ Found ${results.length} matches!`));
   console.log(chalk.green(`✓ Results exported to: ${chalk.cyan(mdFile)}\n`));
 
@@ -322,7 +444,7 @@ async function interactiveMode() {
       break;
 
     case 'export-txt':
-      const txtFile = exportResults(results, 'txt', null, answers.searchTerm, answers.directory);
+      const txtFile = exportResults(results, 'txt', null, searchTermDisplay, directory);
       console.log(chalk.green(`\n✓ Results also exported to: ${chalk.cyan(txtFile)}\n`));
       break;
 
