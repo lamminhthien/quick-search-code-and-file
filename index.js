@@ -36,6 +36,76 @@ function loadGitignorePatterns(directory) {
   return patterns;
 }
 
+// History management functions
+const os = require('os');
+const HISTORY_DIR = path.join(os.homedir(), 'Search_Code_Pro_Data');
+const HISTORY_FILE = path.join(HISTORY_DIR, 'folder_history.json');
+const MAX_HISTORY_ITEMS = 10;
+
+// Ensure history directory exists
+function ensureHistoryDir() {
+  if (!fs.existsSync(HISTORY_DIR)) {
+    fs.mkdirSync(HISTORY_DIR, { recursive: true });
+  }
+}
+
+// Load folder history
+function loadFolderHistory() {
+  ensureHistoryDir();
+
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const data = fs.readFileSync(HISTORY_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.log(chalk.yellow(`Warning: Could not read history: ${err.message}`));
+  }
+
+  return [];
+}
+
+// Save folder to history
+function saveFolderToHistory(folderPath) {
+  ensureHistoryDir();
+
+  try {
+    let history = loadFolderHistory();
+
+    // Remove the folder if it already exists in history
+    history = history.filter(item => item.path !== folderPath);
+
+    // Add to the beginning of the list
+    history.unshift({
+      path: folderPath,
+      lastUsed: new Date().toISOString()
+    });
+
+    // Keep only the last MAX_HISTORY_ITEMS
+    history = history.slice(0, MAX_HISTORY_ITEMS);
+
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf-8');
+  } catch (err) {
+    console.log(chalk.yellow(`Warning: Could not save history: ${err.message}`));
+  }
+}
+
+// Get relative time string
+function getRelativeTime(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
+}
+
 // Search for code in files
 // searchTerm can be a string or an array of strings (multiple keywords)
 async function searchCode(directory, searchTerm, filePattern = '**/*', excludePatterns = []) {
@@ -274,7 +344,9 @@ async function folderPicker(startPath = process.cwd()) {
       { name: chalk.green(`✓ Select this folder: ${currentPath}`), value: '__select__' },
       { name: chalk.blue('.. (Parent directory)'), value: '..' },
       new inquirer.Separator(),
-      ...dirs.map(dir => ({ name: `📁 ${dir}`, value: dir }))
+      ...dirs.map(dir => ({ name: `📁 ${dir}`, value: dir })),
+      new inquirer.Separator(),
+      { name: chalk.yellow('← Go back to folder selection'), value: '__back__' }
     ];
 
     const answer = await inquirer.prompt([
@@ -289,6 +361,8 @@ async function folderPicker(startPath = process.cwd()) {
 
     if (answer.selection === '__select__') {
       return currentPath;
+    } else if (answer.selection === '__back__') {
+      return '__back__';
     } else if (answer.selection === '..') {
       currentPath = path.dirname(currentPath);
     } else {
@@ -301,23 +375,73 @@ async function folderPicker(startPath = process.cwd()) {
 async function interactiveMode() {
   console.log(chalk.bold.blue('\n🔍 Quick Search - Interactive Mode\n'));
 
-  // Ask user to choose between manual input or folder picker
+  // Load folder history
+  const folderHistory = loadFolderHistory();
+
+  // Build choices array
+  const choices = [
+    { name: 'Current directory', value: 'current' },
+    { name: 'Browse and select folder (Interactive)', value: 'picker' },
+    { name: 'Enter folder path manually', value: 'manual' }
+  ];
+
+  // Add recent folders option if history exists
+  if (folderHistory.length > 0) {
+    choices.unshift({ name: 'Select from recent folders', value: 'recent' });
+  }
+
+  // Ask user to choose between manual input, folder picker, or recent folders
   const methodChoice = await inquirer.prompt([
     {
       type: 'list',
       name: 'method',
       message: 'How would you like to select the folder?',
-      choices: [
-        { name: 'Browse and select folder (Interactive)', value: 'picker' },
-        { name: 'Enter folder path manually', value: 'manual' }
-      ]
+      choices: choices
     }
   ]);
 
   let directory;
-  if (methodChoice.method === 'picker') {
+  if (methodChoice.method === 'current') {
+    // Use current directory
+    directory = process.cwd();
+    console.log(chalk.green(`\nSelected folder: ${directory}\n`));
+  } else if (methodChoice.method === 'recent') {
+    // Show recent folders with go back option
+    const recentChoices = folderHistory.map((item, index) => {
+      const lastUsedDate = new Date(item.lastUsed);
+      const relativeTime = getRelativeTime(lastUsedDate);
+      return {
+        name: `${item.path} ${chalk.gray(`(${relativeTime})`)}`,
+        value: item.path
+      };
+    });
+    recentChoices.push(new inquirer.Separator());
+    recentChoices.push({ name: chalk.yellow('← Go back'), value: '__back__' });
+
+    const recentChoice = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'folder',
+        message: 'Select a recent folder:',
+        choices: recentChoices,
+        pageSize: 12
+      }
+    ]);
+
+    if (recentChoice.folder === '__back__') {
+      // Go back to folder selection method
+      return await interactiveMode();
+    }
+
+    directory = recentChoice.folder;
+    console.log(chalk.green(`\nSelected folder: ${directory}\n`));
+  } else if (methodChoice.method === 'picker') {
     const os = require('os');
     directory = await folderPicker(os.homedir());
+    if (directory === '__back__') {
+      // Go back to folder selection method
+      return await interactiveMode();
+    }
     console.log(chalk.green(`\nSelected folder: ${directory}\n`));
   } else {
     const pathInput = await inquirer.prompt([
@@ -339,10 +463,16 @@ async function interactiveMode() {
       message: 'Search mode:',
       choices: [
         { name: 'Single keyword search', value: 'single' },
-        { name: 'Multiple keywords search (find files containing ALL keywords)', value: 'multiple' }
+        { name: 'Multiple keywords search (find files containing ALL keywords)', value: 'multiple' },
+        new inquirer.Separator(),
+        { name: chalk.yellow('← Go back'), value: '__back__' }
       ]
     }
   ]);
+
+  if (searchMode.mode === '__back__') {
+    return await interactiveMode();
+  }
 
   let searchTerms = [];
 
@@ -395,10 +525,14 @@ async function interactiveMode() {
     {
       type: 'input',
       name: 'filePattern',
-      message: 'Enter file pattern (e.g., **/*.js, **/*.{ts,tsx}):',
+      message: 'Enter file pattern (e.g., **/*.js, **/*.{ts,tsx}) or type "back" to go back:',
       default: '**/*'
     }
   ]);
+
+  if (filePatternAnswer.filePattern.toLowerCase() === 'back') {
+    return await interactiveMode();
+  }
 
   const results = await searchCode(directory, searchTerms.length === 1 ? searchTerms[0] : searchTerms, filePatternAnswer.filePattern);
 
@@ -411,6 +545,9 @@ async function interactiveMode() {
     console.log(chalk.yellow(noResultMsg));
     return;
   }
+
+  // Save folder to history
+  saveFolderToHistory(directory);
 
   // Default: Export to Markdown
   const mdFile = exportResults(results, 'md', null, searchTermDisplay, directory);
@@ -504,6 +641,9 @@ program
         console.log(chalk.yellow(`\nNo results found for "${options.search}"\n`));
         return;
       }
+
+      // Save folder to history
+      saveFolderToHistory(options.directory);
 
       // Default: Export to Markdown
       const format = options.export || 'md';

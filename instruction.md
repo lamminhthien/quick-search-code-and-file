@@ -64,3 +64,53 @@ For option browse and select folder, please let user start from ~/ directory
 - Modified `interactiveMode` to pass `os.homedir()` when calling `folderPicker()` for the picker method
 - When users select "Browse and select folder (Interactive)", the folder picker now starts from the home directory (~/) instead of the current working directory
 - Users can still navigate to parent directories using the ".. (Parent directory)" option
+
+
+# Enhancement 11 ✅ COMPLETED
+I want feature to store history, or recent folder path which have used in previous search. Data can be store in folder ~/Search_Code_Pro_Data
+
+**Implementation Details:**
+- Created history management system that stores recent folder paths in `~/Search_Code_Pro_Data/folder_history.json`
+- Added three new functions:
+  - `ensureHistoryDir()`: Creates the data directory if it doesn't exist
+  - `loadFolderHistory()`: Loads the folder history from the JSON file
+  - `saveFolderToHistory()`: Saves a folder path to history with timestamp
+  - `getRelativeTime()`: Formats timestamps into human-readable relative time (e.g., "2 hours ago", "3 days ago")
+- When users select folder in interactive mode, a new option "Select from recent folders" appears if history exists
+- Recent folders are displayed with their last used time in a friendly format
+- History is automatically saved after each successful search (both interactive and CLI mode)
+- Maximum of 10 recent folders are stored, with oldest entries being removed automatically
+- Most recently used folders appear at the top of the list
+- If a folder is used again, it moves to the top with an updated timestamp
+
+# Enhancement 12 ✅ COMPLETED
+When interactive with terminal, let add press backspace to go back function
+
+**Implementation Details:**
+- Added "← Go back" option in folder picker that returns to folder selection method
+- Added "← Go back" option in recent folders list
+- Added "← Go back" option in search mode selection
+- Added "back" keyword support in file pattern input
+- When user selects go back, the interactive mode restarts from the beginning
+- This allows users to navigate back through the prompts if they made a wrong choice
+
+# Enhancement 13 ✅ COMPLETED
+Along with build mac os app, let copy binary to ~/ folder and register to ~/.zshrc and ~/.bashrc
+
+**Implementation Details:**
+- Updated `build-app.sh` to automatically copy the binary to `~/search-code-pro`
+- Added function `add_alias_to_config()` to safely add alias to shell config files
+- Automatically adds `alias scp='~/search-code-pro'` to both `~/.zshrc` and `~/.bashrc`
+- Checks if alias already exists before adding to prevent duplicates
+- Creates config files if they don't exist
+- Users can run `scp` from terminal after sourcing their config file
+- Binary is also available directly at `~/search-code-pro`
+
+# Enhancement 14 ✅ COMPLETED
+Add option select current directory
+
+**Implementation Details:**
+- Added "Current directory" as the first option in folder selection menu
+- When selected, uses `process.cwd()` to get current working directory
+- Allows users to quickly search in their current location without browsing
+- Positioned at the top of the choices list for easy access
