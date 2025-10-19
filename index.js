@@ -316,7 +316,8 @@ async function interactiveMode() {
 
   let directory;
   if (methodChoice.method === 'picker') {
-    directory = await folderPicker();
+    const os = require('os');
+    directory = await folderPicker(os.homedir());
     console.log(chalk.green(`\nSelected folder: ${directory}\n`));
   } else {
     const pathInput = await inquirer.prompt([

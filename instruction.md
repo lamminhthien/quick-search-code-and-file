@@ -55,3 +55,12 @@ For search with multiple keywords, I only want search result contain file which 
 - The `searchCode()` function uses `searchTerms.every()` to ensure ALL keywords are present in a file before including it in results (line 107-109 in index.js)
 - Only files containing ALL keywords are included in the search results
 - Individual lines are then shown with indicators of which keywords matched on each line
+
+# Enhancement 10 ✅ COMPLETED
+For option browse and select folder, please let user start from ~/ directory
+
+**Implementation Details:**
+- Updated `folderPicker` function to accept a `startPath` parameter (already existed)
+- Modified `interactiveMode` to pass `os.homedir()` when calling `folderPicker()` for the picker method
+- When users select "Browse and select folder (Interactive)", the folder picker now starts from the home directory (~/) instead of the current working directory
+- Users can still navigate to parent directories using the ".. (Parent directory)" option
