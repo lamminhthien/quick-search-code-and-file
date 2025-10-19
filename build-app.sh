@@ -4,6 +4,12 @@ set -e
 
 echo "🔨 Building Search Code Pro Application..."
 
+# Create icon first
+echo "🎨 Creating app icon..."
+if [ ! -f "AppIcon.icns" ]; then
+    ./create-icon.sh
+fi
+
 # Clean previous build
 echo "📦 Cleaning previous build..."
 rm -rf dist
@@ -16,6 +22,10 @@ npx pkg . --targets node18-macos-x64 --output dist/macos-cache-cleaner
 echo "📁 Creating app bundle structure..."
 mkdir -p "dist/Search Code Pro.app/Contents/MacOS"
 mkdir -p "dist/Search Code Pro.app/Contents/Resources"
+
+# Copy icon to Resources folder
+echo "🎨 Adding app icon..."
+cp AppIcon.icns "dist/Search Code Pro.app/Contents/Resources/"
 
 # Copy executable
 echo "📋 Copying executable..."

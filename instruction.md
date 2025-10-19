@@ -35,3 +35,23 @@ I want to search with multiple keywords, a behavior is that the prompt input wil
 - Result files show which keywords matched on each line
 - Filename includes all keywords in the format: `search-keyword1-and-keyword2-in-folder-timestamp.md`
 - Works with both markdown and text export formats
+
+# Enhancement 8 ✅ COMPLETED
+I want build mac app have icon, please find icon in folder AppIcon.appiconset
+
+**Implementation Details:**
+- Created `create-icon.sh` script to convert WebP images from AppIcon.appiconset to macOS .icns format
+- Uses `sips` to convert images to PNG format first
+- Uses `iconutil` to create proper macOS icon bundle
+- Updated `build-app.sh` to automatically generate and include the icon in the app bundle
+- Icon is properly placed in `dist/Search Code Pro.app/Contents/Resources/`
+- Info.plist correctly references the icon file
+
+# Enhancement 9 ✅ COMPLETED
+For search with multiple keywords, I only want search result contain file which contain all of keywords matches
+
+**Implementation Details:**
+- This feature was already implemented in Enhancement 7
+- The `searchCode()` function uses `searchTerms.every()` to ensure ALL keywords are present in a file before including it in results (line 107-109 in index.js)
+- Only files containing ALL keywords are included in the search results
+- Individual lines are then shown with indicators of which keywords matched on each line
